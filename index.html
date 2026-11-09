@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f7f8fc">
+  <meta name="description" content="Spojte PDF, Word dokumenty a skeny do jediného PDF. Zdarma, bez registrace a bez odesílání dokumentů na server.">
+  <title>Spojeno — z dokumentů jedno PDF</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+</head>
+<body>
+  <header class="header wrap">
+    <a class="brand" href="./" aria-label="Spojeno, úvod"><span class="brand-mark"><i data-lucide="layers-2"></i></span>Spojeno<span class="brand-dot">.</span></a>
+    <div class="header-right"><a href="#jak">Jak to funguje</a><span class="privacy-pill"><i data-lucide="shield-check"></i> Vaše soubory zůstávají u vás</span></div>
+  </header>
+  <main class="wrap">
+    <section class="hero">
+      <div><div class="eyebrow"><span></span> MÉNĚ SOUBORŮ. VÍCE POŘÁDKU.</div><h1>Všechny podklady.<br><span>Jedno PDF.</span></h1><p>Skeny, dokumenty i přílohy na jednom místě.<br>Přidejte je, seřaďte a spojte jediným kliknutím.</p></div>
+      <div class="paper-scene" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><span class="spark spark-one">+</span><span class="spark spark-two">+</span><div class="paper paper-back"><span class="paper-label blue">DOCX</span><b></b><em></em><em></em><em></em></div><div class="paper paper-mid"><span class="paper-label green">SKEN</span><div class="scan-image"><i data-lucide="image"></i></div></div><div class="paper paper-front"><span class="paper-label coral">PDF</span><b>Všechno spolu.</b><em></em><em></em><em></em><div class="paper-stamp"><i data-lucide="check"></i></div></div><span class="scene-caption"><i data-lucide="arrow-up-right"></i> Tak jednoduché to je.</span></div>
+    </section>
+    <div class="workspace">
+      <section class="files-panel" aria-labelledby="files-heading">
+        <div class="section-heading"><div><span class="step-number">01</span><h2 id="files-heading">Vaše dokumenty</h2><span class="count" id="count">0 / 10</span></div><button id="clear" class="text-button" hidden>Odebrat vše</button></div>
+        <input id="file-input" type="file" multiple hidden accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp,.tif,.tiff,.doc,.docx,.odt,.rtf,.txt">
+        <button class="dropzone" id="dropzone" disabled aria-describedby="formats limits"><span class="upload-icon"><i data-lucide="upload"></i><span>+</span></span><strong>Přetáhněte sem soubory</strong><span>nebo <u>je vyberte ze zařízení</u></span><span class="dropzone-formats" id="formats">PDF · Word · obrázky · a další</span></button>
+        <p class="limits" id="limits">Až 10 souborů · max. 50 MB na soubor · celkem 150 MB <span id="initializing">· Připravuji prostředí…</span></p>
+        <div class="notice" id="notice" role="alert" hidden></div>
+        <div class="list-heading" id="list-heading" hidden><span>POŘADÍ VE VÝSLEDNÉM PDF</span><span>Přetažením nebo šipkami</span></div>
+        <ol id="file-list" class="file-list" aria-label="Dokumenty v pořadí sloučení"></ol>
+        <div class="empty-hint" id="empty-hint"><span><i data-lucide="list-ordered"></i></span><div><strong>Nejdřív dokumenty, potom pořadí.</strong><p>Po přidání si soubory uspořádáte přesně podle sebe.</p></div></div>
+      </section>
+      <aside class="output-panel" aria-labelledby="output-heading">
+        <div class="section-heading"><div><span class="step-number">02</span><h2 id="output-heading">Výsledné PDF</h2></div><i data-lucide="file-check-2"></i></div>
+        <label for="output-name">Název souboru</label><div class="name-input"><input id="output-name" value="spojene-dokumenty" maxlength="100" autocomplete="off" spellcheck="false"><span>.pdf</span></div>
+        <div class="output-stats"><div><span>Dokumenty</span><strong id="stat-count">0</strong></div><div><span>Velikost podkladů</span><strong id="stat-size">0 MB</strong></div></div>
+        <div class="image-options"><label for="image-layout">Stránky obrázků</label><select id="image-layout"><option value="a4">A4 · přizpůsobit, neořezávat</option><option value="original">Podle velikosti obrázku</option></select></div>
+        <button id="convert" class="primary" disabled><i data-lucide="combine"></i><span>Spojit do PDF</span><i data-lucide="arrow-right"></i></button>
+        <p class="button-hint" id="button-hint">Přidejte první soubor a můžeme začít.</p>
+        <div class="progress-box" id="progress-box" hidden><div><span id="progress-message" role="status" aria-live="polite"></span><span id="percent"></span></div><progress id="progress" max="100" value="0" aria-label="Průběh převodu"></progress><p id="progress-detail"></p><button id="cancel" class="text-button">Zrušit převod</button></div>
+        <div id="result" class="result" hidden><span class="result-check"><i data-lucide="check"></i></span><strong>Hotovo. Všechno je spolu.</strong><p id="result-info"></p><a id="download" class="primary" download><i data-lucide="download"></i> Stáhnout PDF</a></div>
+        <div class="private-note"><i data-lucide="lock-keyhole"></i><p><strong>Jen ve vašem prohlížeči.</strong> Dokumenty nikam neodesíláme. Bez registrace, bez vodoznaku.</p></div>
+      </aside>
+    </div>
+    <section class="how" id="jak" aria-labelledby="how-heading"><div class="how-title"><span class="eyebrow">OD PODKLADŮ K HOTOVÉMU PDF</span><h2 id="how-heading">Tři kroky. A máte hotovo.</h2></div><div class="how-steps"><div><span>1</span><strong>Přidejte podklady</strong><p>PDF, Word nebo vyfocený dokument.</p></div><div><span>2</span><strong>Srovnejte pořadí</strong><p>První soubor bude na začátku PDF.</p></div><div><span>3</span><strong>Spojte a stáhněte</strong><p>Jeden soubor, připravený k odeslání.</p></div></div></section>
+    <details class="format-help"><summary>Jaké soubory mohu spojit? <i data-lucide="plus"></i></summary><div><p><strong>PDF, JPG, PNG, WebP, BMP a vícestránkové TIFF skeny.</strong> Dále dokumenty Word (.doc, .docx), OpenDocument (.odt), RTF a TXT. Pro kancelářské dokumenty platí limit 25 MB na soubor.</p><p>Převod Wordu a dalších textových dokumentů při prvním použití stáhne přibližně 250 MB převodníku LibreOffice; spuštění může trvat několik minut a vyžaduje moderní prohlížeč s dostatkem paměti. Pro větší dokumenty doporučujeme Chrome nebo Edge na počítači. Stažený převodník se podle dostupného místa uloží do mezipaměti. Dokumenty ji nikdy nevyužívají.</p><p>U Wordu se může změnit zalomení nebo nahradit chybějící písmo. Před odesláním zkontrolujte výsledné PDF. PDF stránky zachovávají rozměry; obrázky se neořezávají. Aplikace neprovádí OCR, ověřenou konverzi ani PDF/A. Sloučení nezachová platnost původních elektronických podpisů. PDF chráněná heslem nejprve odemkněte ve své PDF aplikaci.</p></div></details>
+  </main>
+  <footer class="wrap"><a class="brand" href="./">Spojeno<span class="brand-dot">.</span></a><span>Malý nástroj. Velká úleva v dokumentech.</span><span>Vytvořeno pro jednodušší den <i data-lucide="sun"></i></span></footer>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
