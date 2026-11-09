@@ -10,7 +10,7 @@ const plural = n => n===1?'strana':n<5?'strany':'stran';
 const icon = name => {const i=document.createElement('i');i.dataset.lucide=name;return i;};
 const paintIcons=()=>createIcons({icons});
 function notice(message=''){ $('notice').textContent=message;$('notice').hidden=!message; }
-function resetResult(){if(outputUrl)URL.revokeObjectURL(outputUrl);outputUrl=null;$('result').hidden=true;$('progress-box').hidden=true;}
+function resetResult(){if(outputUrl)URL.revokeObjectURL(outputUrl);outputUrl=null;$('result').hidden=true;$('progress-box').hidden=true;$('result-warning').hidden=true;}
 function action(name,title,fn,disabled=false){const button=document.createElement('button');button.type='button';button.className='icon-button';button.title=title;button.setAttribute('aria-label',title);button.disabled=disabled||busy;button.append(icon(name));button.onclick=fn;return button;}
 function render(){
   document.body.classList.toggle('busy',busy);
@@ -40,7 +40,16 @@ function render(){
   $('dropzone').disabled=busy||items.length===10;
   $('dropzone').querySelector('strong').textContent=items.length===10?'Máte přidáno všech 10 souborů':items.length?'Přidat další soubory':'Přetáhněte sem soubory';
   $('convert').disabled=busy||!items.length;
-  $('button-hint').textContent=busy?'Dokumenty zpracovává váš prohlížeč.':!items.length?'Přidejte první soubor a můžeme začít.':items.some(i=>OFFICE.has(i.ext))?'První převod Wordu stáhne převodník (~250 MB).':'Bez odesílání souborů. Bez vodoznaku.';
+  const hasOffice=items.some(i=>OFFICE.has(i.ext));
+  const needsCompatible=items.some(i=>['odt','rtf'].includes(i.ext));
+  $('office-options').hidden=!hasOffice;
+  $('office-mode').disabled=busy;
+  $('image-layout').disabled=busy;
+  $('office-mode').options[0].disabled=needsCompatible;
+  if(needsCompatible)$('office-mode').value='compatible';
+  const compatible=$('office-mode').value==='compatible';
+  $('office-mode-hint').textContent=needsCompatible?'ODT a RTF vyžadují kompatibilní převod. Při prvním použití stáhne asi 250 MB.':compatible?'Lepší podpora složitého rozložení. První spuštění stáhne asi 250 MB; další použití využije mezipaměť.':'DOC, DOCX a TXT bez velkého stahování. U složitých dokumentů se může změnit rozložení.';
+  $('button-hint').textContent=busy?'Dokumenty zpracovává váš prohlížeč.':outputUrl?'PDF je připravené ke stažení níže.':!items.length?'Přidejte první soubor a můžeme začít.':hasOffice?(compatible?'Zvolený kompatibilní převod: první stažení ~250 MB.':'Rychlý převod Wordu · bez velkého stahování.'):'Bez odesílání souborů. Bez vodoznaku.';
   paintIcons();
 }
 function move(from,to){if(busy||from<0||to<0||to>=items.length)return;const [item]=items.splice(from,1);items.splice(to,0,item);resetResult();render();}
@@ -63,6 +72,7 @@ $('dropzone').ondragenter=e=>{if(e.dataTransfer.types.includes('Files')&&!busy){
 $('dropzone').ondragleave=()=>{if(--depth<=0){depth=0;$('dropzone').classList.remove('drag-over');}};
 $('clear').onclick=()=>{if(busy)return;items=[];notice();resetResult();render();};
 $('image-layout').onchange=()=>{items.forEach(i=>{if(IMAGES.has(i.ext))delete i.pdf;});resetResult();};
+$('office-mode').onchange=()=>{stopOffice();items.forEach(i=>{if(OFFICE.has(i.ext)){delete i.pdf;delete i.losses;i.pages=null;i.error=null;}});resetResult();notice();render();};
 $('output-name').oninput=()=>{if(outputUrl)$('download').download=cleanFilename($('output-name').value);};
 function progress(value,message,detail=''){$('progress').value=value;$('percent').textContent=Math.round(value)+' %';$('progress-message').textContent=message;$('progress-detail').textContent=detail;}
 function cancel(){job++;busy=false;stopOffice();resetResult();notice('Převod byl zrušen. Soubory zůstaly připravené pro další pokus.');render();}
@@ -83,7 +93,14 @@ $('convert').onclick=async()=>{
       if(!bytes){
         if(current.ext==='pdf') bytes=new Uint8Array(await current.file.arrayBuffer());
         else if(IMAGES.has(current.ext)) bytes=await imagesToPdf(current.file,$('image-layout').value);
-        else bytes=await convertOffice(current.file,info=>{if(token!==job)return;progress(index/items.length*85,'Spouštím převodník dokumentů…',info.phase==='ready'?'Převodník je připraven.':'První spuštění může trvat několik minut. Stahuje se asi 250 MB a připravuje LibreOffice. Soubory neopouštějí zařízení.');});
+        else {
+          const mode=$('office-mode').value;
+          const converted=await convertOffice(current.file,info=>{
+            if(token!==job)return;
+            progress((index+Math.min(99,info.percent||0)/100)/items.length*85,info.message||'Převádím dokument…',info.detail||(mode==='fast'?'Rychlý převod · soubor neopouští vaše zařízení.':'Kompatibilní převod · soubor neopouští vaše zařízení.'));
+          },mode);
+          bytes=converted.bytes;current.losses=converted.losses;
+        }
         if(token!==job)return;
         const source=await readPdf(bytes);current.pages=source.getPageCount();current.pdf=bytes;
       }
@@ -96,12 +113,16 @@ $('convert').onclick=async()=>{
     outputUrl=URL.createObjectURL(new Blob([result.bytes],{type:'application/pdf'}));
     $('download').href=outputUrl;$('download').download=cleanFilename($('output-name').value);
     $('result-info').textContent=result.pages+' '+plural(result.pages)+' · '+megabytes(result.bytes.length)+' · Připraveno ke stažení';
+    const fastOffice=items.some(i=>OFFICE.has(i.ext)&&$('office-mode').value==='fast');
+    const losses=items.flatMap(i=>i.losses||[]).filter(l=>l.severity==='dropped'||l.severity==='degraded');
+    $('result-warning').hidden=!fastOffice;
+    $('result-warning').textContent=losses.length?'Převod má omezení: některé prvky mohou vypadat jinak nebo chybět. U starého DOC se nemusí zachovat textová pole, kreslené objekty a komentáře. Před použitím PDF zkontrolujte; pro složité dokumenty zkuste kompatibilní převod.':'Rychlý převod může změnit písma nebo zalomení. Před odesláním PDF zkontrolujte.';
     $('progress-box').hidden=true;$('result').hidden=false;
     $('button-hint').textContent='PDF je připravené ke stažení níže.';
   }catch(error){
     if(token!==job)return;
     const direct=/příliš velký|milionů|1 000|moderní prohlížeč|formulář/.test(error.message);
-    const message=direct?error.message:friendlyError(error);
+    const message=direct||error.userFacing?error.message:friendlyError(error);
     if(current)current.error=message;
     notice((current?current.file.name+': ':'')+message+'\nNevytvořili jsme neúplné PDF. Opravte nebo odeberte problematický soubor a zkuste to znovu.');
     $('progress-box').hidden=true;

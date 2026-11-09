@@ -1,28 +1,41 @@
-let converter;
-let initializing;
-function timeout(promise,ms) {
-  let timer;
-  return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Conversion timeout')),ms);})]).finally(()=>clearTimeout(timer));
+let active;
+let compat;
+export const userError=message=>Object.assign(new Error(message),{userFacing:true});
+export function stopOffice(){
+  if(active){active.stop();active=null;}
+  compat?.stopCompatibility();
 }
-export function stopOffice() {
-  // Terminate synchronously, including when LibreOffice is still compiling.
-  if(converter?.worker) converter.worker.terminate();
-  converter=null;initializing=null;
-}
-export async function convertOffice(file,onProgress) {
-  if(!crossOriginIsolated || typeof SharedArrayBuffer==='undefined') throw new Error('Pro převod Wordu je potřeba moderní prohlížeč a povolené služby webu. Otevřete aplikaci znovu v Chromu nebo Edge; případně soubor uložte do PDF.');
-  if(!converter?.isReady()) {
-    if(!initializing) initializing=(async()=>{
-      const {WorkerBrowserConverter,createWasmPaths}=await import('@matbee/libreoffice-converter/browser');
-      const base=new URL('runtime/',document.baseURI).href;
-      converter=new WorkerBrowserConverter({...createWasmPaths(base),browserWorkerJs:base+'browser.worker.js',onProgress:info=>onProgress(info)});
-      await timeout(converter.initialize(),300000);
-    })();
-    try{await initializing;}catch(error){stopOffice();throw error;}
+export async function convertOffice(file,onProgress,mode='fast'){
+  if(mode==='compatible'){
+    compat=await import('./office-compat.js');
+    return {bytes:await compat.convertCompatibility(file,onProgress),losses:[]};
   }
-  const local=converter;
-  try{
-    const converted=await timeout(local.convert(new Uint8Array(await file.arrayBuffer()),{outputFormat:'pdf',inputFormat:file.name.split('.').pop().toLowerCase()},'document.'+file.name.split('.').pop().toLowerCase()),120000);
-    return converted.data;
-  }catch(error){stopOffice();throw error;}
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['doc','docx','txt'].includes(ext)) throw userError('Pro ODT a RTF zvolte kompatibilní převod. Velký převodník se bez této volby nestáhne.');
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  onProgress({phase:'starting',percent:5,message:'Načítám malý převodník Wordu…'});
+  return new Promise((resolve,reject)=>{
+    const worker=new Worker(new URL('./office.worker.js',import.meta.url),{type:'module'});
+    let settled=false;
+    const operation={stop:()=>finish(new DOMException('Převod zrušen','AbortError'))};
+    const timer=setTimeout(()=>finish(userError('Rychlý převod dokumentu se nedokončil do dvou minut. Zkuste kompatibilní převod nebo dokument uložte do PDF ve Wordu.')),120000);
+    function finish(error,result){
+      if(settled)return;settled=true;clearTimeout(timer);worker.terminate();
+      if(active===operation)active=null;
+      if(error)reject(error);else resolve(result);
+    }
+    active=operation;
+    worker.onmessage=({data})=>{
+      if(data.type==='progress')onProgress(data.info);
+      else if(data.type==='complete')finish(null,{bytes:data.bytes,losses:data.losses});
+      else {
+        const msg=data.message||'';
+        if(/password|encrypt/i.test(msg))finish(userError('Word dokument je chráněný heslem. Nejprve jej odemkněte v původní aplikaci.'));
+        else if(/font|fetch|download|network/i.test(msg))finish(userError('Nepodařilo se načíst písma převodníku. Zkontrolujte připojení a zkuste to znovu.'));
+        else finish(userError('Rychlý převod tento dokument nedokáže zpracovat. Zkuste kompatibilní převod nebo jej uložte do PDF ve Wordu.'));
+      }
+    };
+    worker.onerror=()=>finish(userError('Malý převodník se nepodařilo načíst. Obnovte stránku a zkuste to znovu.'));
+    worker.postMessage({bytes,ext,base:document.baseURI},[bytes.buffer]);
+  });
 }

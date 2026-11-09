@@ -9,14 +9,17 @@ const isolated = response => {
   headers.set('Cross-Origin-Opener-Policy','same-origin');
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 };
-async function runtime(request) {
+async function runtime(request,event) {
   const cache = await caches.open(CACHE);
   const hit = await cache.match(request);
   if(hit) return hit;
   const response = await fetch(request);
   if(!response.ok) throw new Error('Runtime download failed: '+response.status);
   // Cache only public conversion software, never documents.
-  try { await cache.put(request, response.clone()); } catch { /* Storage quota must not block conversion. */ }
+  // Stream to the converter immediately instead of waiting for a complete
+  // 50–100 MB cache write before the first byte can reach the caller.
+  const saved=cache.put(request,response.clone()).catch(()=>{});
+  event.waitUntil(saved);
   return response;
 }
 self.addEventListener('fetch', event => {
@@ -25,7 +28,7 @@ self.addEventListener('fetch', event => {
   if(event.request.cache==='only-if-cached' && event.request.mode!=='same-origin') return;
   event.respondWith((async()=>{
     if(url.pathname.endsWith('/runtime/soffice.wasm')) {
-      const manifest = await (await runtime(new Request(new URL('runtime/manifest.json',self.registration.scope)))).json();
+      const manifest = await (await runtime(new Request(new URL('runtime/manifest.json',self.registration.scope)),event)).json();
       let index=0, reader;
       const stream=new ReadableStream({async pull(controller){
         try {
@@ -33,7 +36,7 @@ self.addEventListener('fetch', event => {
             if(!reader) {
               if(index>=manifest.chunks.length){controller.close();return;}
               const part=manifest.chunks[index++];
-              reader=(await runtime(new Request(new URL('runtime/'+part.name,self.registration.scope)))).body.getReader();
+              reader=(await runtime(new Request(new URL('runtime/'+part.name,self.registration.scope)),event)).body.getReader();
             }
             const {done,value}=await reader.read();
             if(done){reader=null;continue;}
@@ -43,6 +46,6 @@ self.addEventListener('fetch', event => {
       }});
       return isolated(new Response(stream,{headers:{'Content-Type':'application/wasm','Content-Length':String(manifest.size)}}));
     }
-    return isolated(await (url.pathname.includes('/runtime/') ? runtime(event.request) : fetch(event.request)));
+    return isolated(await (url.pathname.includes('/runtime/') ? runtime(event.request,event) : fetch(event.request)));
   })());
 });

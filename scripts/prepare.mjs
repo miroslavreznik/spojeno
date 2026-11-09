@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, readdir } from 'node:fs/promises';
 const root = new URL('../', import.meta.url);
 const target = new URL('public/runtime/', root);
 const source = new URL('node_modules/@matbee/libreoffice-converter/', root);
@@ -17,3 +17,13 @@ for(let start=0;start<wasm.length;start+=chunkSize){
 }
 await writeFile(new URL('manifest.json',target),JSON.stringify({version:'2.7.2',size:wasm.length,chunks}));
 console.log('Office runtime ready, including '+chunks.length+' WASM chunks.');
+const fonts=new URL('public/fonts/',root);
+await mkdir(fonts,{recursive:true});
+for(const family of ['arimo','tinos','cousine','carlito','caladea']){
+  const dir=new URL('node_modules/@expo-google-fonts/'+family+'/',root);
+  for(const name of await readdir(dir,{recursive:true})){
+    if(/_(400Regular|700Bold|400Regular_Italic|700Bold_Italic)\.ttf$/.test(name))await copyFile(new URL(name.replaceAll('\\','/'),dir),new URL(name.split(/[\\/]/).pop(),fonts));
+    if(/(OFL|LICENSE|LICENSE_FONT)(\.txt)?$/i.test(name))await copyFile(new URL(name.replaceAll('\\','/'),dir),new URL(family+'-'+name.split(/[\\/]/).pop(),fonts));
+  }
+}
+console.log('Self-hosted fonts ready; loaded only by the small Word converter when needed.');
